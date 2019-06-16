@@ -33,13 +33,13 @@ void uniViewer::keyPressEvent(QKeyEvent *event)
 {
     switch (event->key()) {
     case Qt::Key_Left:
-        currentKF_ = (currentKF_ + nbKeyFrames - 1) % nbKeyFrames;
-        setManipulatedFrame(keyFrame_[currentKF_]);
+        currentKP_ = (currentKP_ + nbKeyPoints - 1) % nbKeyPoints;
+        setManipulatedFrame(keyPoint_[currentKP_]);
         update();
         break;
     case Qt::Key_Right:
-        currentKF_ = (currentKF_ + 1) % nbKeyFrames;
-        setManipulatedFrame(keyFrame_[currentKF_]);
+        currentKP_ = (currentKP_ + 1) % nbKeyPoints;
+        setManipulatedFrame(keyPoint_[currentKP_]);
         update();
         break;
     case Qt::Key_Return:
@@ -56,14 +56,18 @@ void uniViewer::keyPressEvent(QKeyEvent *event)
         updatePath();
         break;
     case Qt::Key_Up:
+        updateOverlayedText("epsilon +1");
         for (int i = 0; i < kelvinlets.size(); ++i) {
             kelvinlets[i].epsilon += 1.0f;
         }
+        updatePath();
         break;
     case Qt::Key_Down:
+        updateOverlayedText("epsilon -1");
         for (int i = 0; i < kelvinlets.size(); ++i) {
             kelvinlets[i].epsilon -= 1.0f;
         }
+        updatePath();
         break;
     case Qt::Key_J:
         updateOverlayedText("Test overlay");
@@ -161,22 +165,14 @@ void uniViewer::init()
     setSceneRadius( 10.0 );
     showEntireScene();
 
-    // myFrame is the Frame that will be interpolated.
-    //Frame *myFrame = new Frame();
-
-    // Set myFrame as the KeyFrameInterpolator interpolated Frame.
-//    kfi_.setFrame(myFrame);
-//    kfi_.setLoopInterpolation();
-
     // An array of manipulated (key) frames.
-    keyFrame_ = new ManipulatedFrame *[nbKeyFrames];
+    keyPoint_ = new ManipulatedFrame *[nbKeyPoints];
 
     // Create an initial path
-    for (int i = 0; i < nbKeyFrames; i++) {
-        keyFrame_[i] = new ManipulatedFrame();
-        keyFrame_[i]->setPosition(-1.0 + 2.0 * i / (nbKeyFrames - 1), 0.0, 0.0);
-        //kfi_.addKeyFrame(keyFrame_[i]);
-        frameList_.push_back(Frame(keyFrame_[i]->position(), keyFrame_[i]->orientation()));
+    for (int i = 0; i < nbKeyPoints; i++) {
+        keyPoint_[i] = new ManipulatedFrame();
+        keyPoint_[i]->setPosition(-1.0 + 2.0 * i / (nbKeyPoints - 1), 0.0, 0.0);
+        keyPointList_.push_back(Frame(keyPoint_[i]->position(), keyPoint_[i]->orientation()));
     }
 
     for (int i = 0; i < kelvinlets.size(); ++i) {
@@ -187,9 +183,8 @@ void uniViewer::init()
 
     updatePath();
 
-
-    currentKF_ = 0;
-    setManipulatedFrame(keyFrame_[currentKF_]);
+    currentKP_ = 0;
+    setManipulatedFrame(keyPoint_[currentKP_]);
 
     // Enable direct frame manipulation when the mouse hovers.
     setMouseTracking(true);
@@ -205,10 +200,10 @@ void uniViewer::init()
 
 
     //connect(&kfi_, SIGNAL(interpolated()), SLOT(update()));
-    connect(keyFrame_[0], SIGNAL(manipulated()), SLOT(update()));
-    connect(keyFrame_[0], SIGNAL(manipulated()), SLOT(updatePath()));
-    connect(keyFrame_[1], SIGNAL(manipulated()), SLOT(update()));
-    connect(keyFrame_[1], SIGNAL(manipulated()), SLOT(updatePath()));
+    connect(keyPoint_[0], SIGNAL(manipulated()), SLOT(update()));
+    connect(keyPoint_[0], SIGNAL(manipulated()), SLOT(updatePath()));
+    connect(keyPoint_[1], SIGNAL(manipulated()), SLOT(update()));
+    connect(keyPoint_[1], SIGNAL(manipulated()), SLOT(updatePath()));
     //kfi_.startInterpolation();
 }
 
@@ -233,13 +228,13 @@ void uniViewer::draw()
 
     //kfi_.drawPath(5, 3);
 
-    for (int i = 0; i < nbKeyFrames; ++i) {
+    for (int i = 0; i < nbKeyPoints; ++i) {
       glPushMatrix();
       //glMultMatrixd(kfi_.keyFrame(i).matrix());
-      glMultMatrixd(keyFrame_[i]->matrix());
-      frameList_[i] = Frame(keyFrame_[i]->position(), keyFrame_[i]->orientation());
+      glMultMatrixd(keyPoint_[i]->matrix());
+      keyPointList_[i] = Frame(keyPoint_[i]->position(), keyPoint_[i]->orientation());
 
-      if ((i == currentKF_) || (keyFrame_[i]->grabsMouse()))
+      if ((i == currentKP_) || (keyPoint_[i]->grabsMouse()))
         drawAxis(0.4*10/stepFactor);
       else
         drawAxis(0.2*10/stepFactor);
@@ -277,18 +272,18 @@ void uniViewer::postDraw() {
 void uniViewer::updatePath() {
     path_.clear();
 
-    if (frameList_.first().position() == frameList_.last().position())
-      path_.push_back(Frame(frameList_.first().position(),
-                            frameList_.first().orientation()));
+    if (keyPointList_.first().position() == keyPointList_.last().position())
+      path_.push_back(Frame(keyPointList_.first().position(),
+                            keyPointList_.first().orientation()));
     else {
       static Frame fr;
       Frame *kf_[4];
-      kf_[0] = &frameList_[0];
+      kf_[0] = &keyPointList_[0];
       kf_[1] = kf_[0];
       int index = 1;
-      kf_[2] = (index < frameList_.size()) ? &frameList_[index] : nullptr;
+      kf_[2] = (index < keyPointList_.size()) ? &keyPointList_[index] : nullptr;
       index++;
-      kf_[3] = (index < frameList_.size()) ? &frameList_[index] : nullptr;
+      kf_[3] = (index < keyPointList_.size()) ? &keyPointList_[index] : nullptr;
 
       while (kf_[2] != nullptr) {
         Vec diff = kf_[2]->position() - kf_[1]->position();
@@ -317,7 +312,7 @@ void uniViewer::updatePath() {
         kf_[1] = kf_[2];
         kf_[2] = kf_[3];
         index++;
-        kf_[3] = (index < frameList_.size()) ? &frameList_[index] : nullptr;
+        kf_[3] = (index < keyPointList_.size()) ? &keyPointList_[index] : nullptr;
       }
 
       // Add last KeyFrame
@@ -354,12 +349,20 @@ void uniViewer::updateKelvinlets() {
         kelvinlets[i].translation_f = kelvinlets[i].pos - kelvinlets[i].center;
     }
 
+    FieldAdvector fieldAdvector;
+    for( unsigned int v = 0 ; v < mesh.vertices.size() ; ++v ) {
+        vertexDisplacements[v] = point3d(0, 0, 0);
+    }
+
     for (int i = 0; i < kelvinlets.size(); ++i) {
         for( unsigned int v = 0 ; v < mesh.vertices.size() ; ++v ) {
-            FieldAdvector fieldAdvector;
-            vertexDisplacements[v] = fieldAdvector.RungeKutta_RK4(mesh.vertices[v].p , kelvinlets[i] , 10);
-            cout << vertexDisplacements[v] << endl;
+            vertexDisplacements[v] += fieldAdvector.RungeKutta_RK4(mesh.vertices[v].p , kelvinlets[i] , 10);
         }
+    }
+
+    cout << "Displacements" << endl;
+    for( unsigned int v = 0 ; v < mesh.vertices.size() ; ++v ) {
+        cout << vertexDisplacements[v] << endl;
     }
 }
 
@@ -455,4 +458,23 @@ void uniViewer::updateOverlayedText(const QString &t) {
 void uniViewer::addToStepFactor(int t) {
     stepFactor += t;
     stepFactor = max(1, stepFactor);
+}
+
+void uniViewer::addKeyPoint() {
+    cout << "add to " << nbKeyPoints << endl;
+    nbKeyPoints++;
+    cout << "result " << nbKeyPoints << endl;
+    keyPoint_[nbKeyPoints - 1] = new ManipulatedFrame();
+    keyPoint_[nbKeyPoints - 1]->setPosition(-1.0 + 2.0 * (nbKeyPoints - 1) / (nbKeyPoints - 1), 0.0, 0.0);
+    keyPointList_.push_back(Frame(keyPoint_[nbKeyPoints - 1]->position(), keyPoint_[nbKeyPoints - 1]->orientation()));
+
+    updatePath();
+}
+
+void uniViewer::removeKeyPoint() {
+    if (nbKeyPoints > 2) {
+        nbKeyPoints--;
+        keyPointList_.pop_back();
+        updatePath();
+    }
 }

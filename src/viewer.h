@@ -86,7 +86,7 @@ public:
     void drawPath();
     void updateOverlayedText( QString const & t );
 
-    void addToStepFactor(int t);
+    inline int getNbKeypoints() { return nbKeyPoints; }
 
     void keyPressEvent(QKeyEvent *event);
     void mouseDoubleClickEvent(QMouseEvent *e);
@@ -104,17 +104,21 @@ public slots:
     void updatePath();
     void updateKelvinlet();
     void updateKelvinlets();
+    void addKeyPoint();
+    void removeKeyPoint();
+    void addToStepFactor(int t);
+
     void openMesh();
     void saveMesh();
     void showControls();
     void saveSnapShotPlusPlus();
 
 private:
-    qglviewer::ManipulatedFrame **keyFrame_;
+    qglviewer::ManipulatedFrame **keyPoint_;
     qglviewer::KeyFrameInterpolator kfi_;
-    QList<qglviewer::Frame> frameList_;
+    QList<qglviewer::Frame> keyPointList_;
     QList<qglviewer::Frame> path_;
     int stepFactor = 10;
-    int nbKeyFrames = 2;
-    int currentKF_;
+    int nbKeyPoints = 2;
+    int currentKP_;
 };
