@@ -2,6 +2,7 @@
 #include "mesh.h"
 #include "kelvinlet.h"
 #include "fieldadvector.h"
+#include "unikelvinlet.h"
 
 // Parsing
 #include "basicIO.h"
@@ -73,6 +74,7 @@ class uniViewer : public QGLViewer
     KelvinLet kelvinlet;
     std::vector<point3d> vertexDisplacements;
     std::vector<KelvinLet> kelvinlets;
+    std::vector<uniKelvinLet> unikelvinlets;
 
     QWidget * controls;
     QSmartTextOverlay textOverlay;
@@ -80,20 +82,20 @@ class uniViewer : public QGLViewer
 public:
     uniViewer(QGLWidget *parent = nullptr) : QGLViewer(parent) {}
 
-    void addActionsToToolbar(QToolBar *toolBar);
     void adjustCamera( point3d const & bb , point3d const & BB );
 
     void drawPath();
     void updateOverlayedText( QString const & t );
 
     inline int getNbKeypoints() { return nbKeyPoints; }
+    inline int getStepFactor() { return stepFactor; }
+    inline bool getDebugView() { return debugView; }
 
     void keyPressEvent(QKeyEvent *event);
     void mouseDoubleClickEvent(QMouseEvent *e);
     void mousePressEvent(QMouseEvent *e);
     void mouseMoveEvent(QMouseEvent *e);
     void mouseReleaseEvent(QMouseEvent *e);
-    //void wheelEvent( QWheelEvent * e );
 
     void draw();
     void postDraw();
@@ -102,16 +104,24 @@ public:
 
 public slots:
     void updatePath();
-    void updateKelvinlet();
+    void updatePath2();
     void updateKelvinlets();
+    //void updateUniKelvinLets();
+
+    void updateKeyPoint();
     void addKeyPoint();
     void removeKeyPoint();
-    void addToStepFactor(int t);
+
+    inline void setStepFactor(int in) { stepFactor = in; update(); updatePath(); }
+    inline void setDebugView(bool in) { debugView = in; update(); }
 
     void openMesh();
     void saveMesh();
     void showControls();
-    void saveSnapShotPlusPlus();
+    void saveSnapShot();
+
+signals:
+    void pathUpdated();
 
 private:
     qglviewer::ManipulatedFrame **keyPoint_;
@@ -121,4 +131,6 @@ private:
     int stepFactor = 10;
     int nbKeyPoints = 2;
     int currentKP_;
+
+    bool debugView = false;
 };

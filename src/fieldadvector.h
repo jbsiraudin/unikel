@@ -14,8 +14,6 @@ struct FieldAdvector{
         return advectedTrajectory;
     }
 
-
-
     template< class field_struct_t >
     point3d RungeKutta_RK4( point3d const & x , field_struct_t const & field , unsigned int nSteps ) const {
         point3d advectedTrajectory(0,0,0);

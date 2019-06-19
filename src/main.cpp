@@ -16,7 +16,6 @@ int main(int argc, char **argv) {
   QMainWindow *mainWindow = new QMainWindow;
   QWidget *widget = new QWidget;
   QDockWidget *dock = new QDockWidget("Tools", mainWindow);
-  //QVBoxLayout *vLayout = new QVBoxLayout();
   dock->setWidget(widget);
 
   // [0] Def
@@ -36,11 +35,13 @@ int main(int argc, char **argv) {
   QLabel *stepFactorLabel = new QLabel(QStringLiteral("Step factor: "));
   QSpinBox *stepFactorSP = new QSpinBox;
   stepFactorSP->setRange(1, 30);
-  stepFactorSP->setValue(10);
+  stepFactorSP->setValue(viewer->getStepFactor());
+  QObject::connect(stepFactorSP, QOverload<int>::of(&QSpinBox::valueChanged), viewer, [=](int i) { viewer->setStepFactor(i); });
 
   QCheckBox *debugKelvinletsCheckbox = new QCheckBox;
   debugKelvinletsCheckbox->setText(QStringLiteral("DEBUG VIEW"));
-  debugKelvinletsCheckbox->setChecked(false);
+  debugKelvinletsCheckbox->setChecked(viewer->getDebugView());
+  QObject::connect(debugKelvinletsCheckbox, &QCheckBox::stateChanged, viewer, [=]() { viewer->setDebugView(debugKelvinletsCheckbox->checkState()); });
 
   QGridLayout *kpParamLayout = new QGridLayout;
   kpParamLayout->addWidget(kpParamLabel, 0, 0);
@@ -53,8 +54,15 @@ int main(int argc, char **argv) {
   kpParamGroup->setLayout(kpParamLayout);
   // ! [0]
 
+  //connect(action, &QAction::triggered, engine, [=]() { engine->processAction(action->text()); });
+
   // [1] Def
   QGroupBox *kpCtrlGroup = new QGroupBox(QStringLiteral("Keypoint in focus"));
+  QComboBox *kpList = new QComboBox;
+  for (int i = 0; i < viewer->getNbKeypoints(); i++) {
+      kpList->addItem(QStringLiteral("Point ")+std::to_string(i+1).c_str());
+  }
+
 
   QLabel *posLabel = new QLabel(QStringLiteral("POSITION"));
   QDoubleSpinBox *posKeypointX = new QDoubleSpinBox;
@@ -82,23 +90,27 @@ int main(int argc, char **argv) {
 
   QLabel *epsilonLabel = new QLabel(QStringLiteral("EPSILON"));
   QDoubleSpinBox *epsilonSP = new QDoubleSpinBox();
-  epsilonSP->setValue(1.1);
-  epsilonSP->setRange(0.0, 5.0);
+  epsilonSP->setValue(10.0);
+  epsilonSP->setRange(0.0, 30.0);
+
+  QObject::connect(kpList, QOverload<int>::of(&QComboBox::currentIndexChanged), viewer, [=](int in){  });
+
 
   QGridLayout *kpCtrlLayout = new QGridLayout;
-  kpCtrlLayout->addWidget(posLabel, 0, 0);
-  kpCtrlLayout->addWidget(new QLabel(QStringLiteral("x: ")), 0, 1);
-  kpCtrlLayout->addWidget(posKeypointX, 0, 2);
-  kpCtrlLayout->addWidget(new QLabel(QStringLiteral("y: ")), 0, 3);
-  kpCtrlLayout->addWidget(posKeypointY, 0, 4);
-  kpCtrlLayout->addWidget(new QLabel(QStringLiteral("z: ")), 0, 5);
-  kpCtrlLayout->addWidget(posKeypointZ, 0, 6);
-  kpCtrlLayout->addWidget(rotLabel, 1, 0, 1, 1);
-  kpCtrlLayout->addWidget(rotationSlider, 1, 1, 1, 6);
-  kpCtrlLayout->addWidget(scaleLabel, 2, 0, 1, 1);
-  kpCtrlLayout->addWidget(scaleSlider, 2, 1, 1, 6);
-  kpCtrlLayout->addWidget(epsilonLabel, 3, 0, 1, 1);
-  kpCtrlLayout->addWidget(epsilonSP, 3, 1, 1, 6);
+  kpCtrlLayout->addWidget(kpList, 0, 0, 1, 7);
+  kpCtrlLayout->addWidget(posLabel, 1, 0);
+  kpCtrlLayout->addWidget(new QLabel(QStringLiteral("x: ")), 1, 1);
+  kpCtrlLayout->addWidget(posKeypointX, 1, 2);
+  kpCtrlLayout->addWidget(new QLabel(QStringLiteral("y: ")), 1, 3);
+  kpCtrlLayout->addWidget(posKeypointY, 1, 4);
+  kpCtrlLayout->addWidget(new QLabel(QStringLiteral("z: ")), 1, 5);
+  kpCtrlLayout->addWidget(posKeypointZ, 1, 6);
+  kpCtrlLayout->addWidget(rotLabel, 2, 0, 1, 1);
+  kpCtrlLayout->addWidget(rotationSlider, 2, 1, 1, 6);
+  kpCtrlLayout->addWidget(scaleLabel, 3, 0, 1, 1);
+  kpCtrlLayout->addWidget(scaleSlider, 3, 1, 1, 6);
+  kpCtrlLayout->addWidget(epsilonLabel, 4, 0, 1, 1);
+  kpCtrlLayout->addWidget(epsilonSP, 4, 1, 1, 6);
   kpCtrlGroup->setLayout(kpCtrlLayout);
   // ! [1]
 
@@ -107,12 +119,15 @@ int main(int argc, char **argv) {
 
   QPushButton *openMeshBtn = new QPushButton;
   openMeshBtn->setText(QStringLiteral("Open mesh"));
+  QObject::connect(openMeshBtn, &QPushButton::clicked, viewer, &uniViewer::openMesh);
 
   QPushButton *saveMeshBtn = new QPushButton;
   saveMeshBtn->setText(QStringLiteral("Save mesh"));
+  QObject::connect(saveMeshBtn, &QPushButton::clicked, viewer, &uniViewer::saveMesh);
 
   QPushButton *snapshotBtn = new QPushButton;
   snapshotBtn->setText(QStringLiteral("Snapshot"));
+  QObject::connect(snapshotBtn, &QPushButton::clicked, viewer, &uniViewer::saveSnapShot);
 
   QGridLayout *indexLayout = new QGridLayout;
   indexLayout->addWidget(openMeshBtn, 0, 0);
@@ -127,19 +142,11 @@ int main(int argc, char **argv) {
   layout->addWidget(kpCtrlGroup, 2, 0);
   widget->setLayout(layout);
 
-  // Final additions
-//  QToolBar *toolBar = new QToolBar;
-//  toolBar->setIconSize(QSize(35,35));
-//  toolBar->setAutoFillBackground(true);
-//  toolBar->setStyleSheet("QToolBar { background: white; }");
-//  viewer->addActionsToToolbar(toolBar);
-//  mainWindow->addToolBar(toolBar);
-
   mainWindow->setCentralWidget(viewer);
   mainWindow->addDockWidget(Qt::RightDockWidgetArea, dock);
   mainWindow->setWindowTitle("Moving Kelvinlets Experiment");
-  mainWindow->setMinimumWidth(1200);
-  mainWindow->setMinimumHeight(900);
+//  mainWindow->setMinimumWidth(1200);
+//  mainWindow->setMinimumHeight(900);
   mainWindow->setWindowIcon(QIcon("/home/siraudin/Dev/railedkelvinlets/Unikel/icons/icon.png"));
   mainWindow->show();
 
