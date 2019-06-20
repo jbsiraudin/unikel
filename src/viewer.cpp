@@ -27,9 +27,6 @@ void uniViewer::keyPressEvent(QKeyEvent *event)
         setManipulatedFrame(keyPoint_[currentKP_]);
         update();
         break;
-    case Qt::Key_Return:
-        kfi_.toggleInterpolation();
-        break;
     case Qt::Key_Up:
         updateOverlayedText("epsilon +1");
         for (unsigned long i = 0; i < kelvinlets.size(); ++i) {
@@ -47,9 +44,6 @@ void uniViewer::keyPressEvent(QKeyEvent *event)
     case Qt::Key_J:
         updateOverlayedText("Test overlay");
         update();
-    // case Qt::Key_C :
-    // kfi_.setClosedPath(!kfi_.closedPath());
-    // break;
     case Qt::Key_H:
         help();
     default:
@@ -147,7 +141,7 @@ void uniViewer::init()
     for (int i = 0; i < nbKeyPoints; i++) {
         keyPoint_[i] = new ManipulatedFrame();
         keyPoint_[i]->setPosition(-1.0 + 2.0 * i / (nbKeyPoints - 1), 0.0, 0.0);
-        keyPointList_.push_back(Frame(keyPoint_[i]->position(), keyPoint_[i]->orientation()));
+        keyPoints_.push_back(keyPoint(keyPoint_[i]->position()));
     }
 
     for (unsigned long i = 0; i < kelvinlets.size(); ++i) {
@@ -164,16 +158,11 @@ void uniViewer::init()
     // Enable direct frame manipulation when the mouse hovers.
     setMouseTracking(true);
 
-    setKeyDescription(Qt::Key_Plus, "Increases interpolation speed");
-    setKeyDescription(Qt::Key_Minus, "Decreases interpolation speed");
-    setKeyDescription(Qt::Key_Left, "Selects previous key frame");
-    setKeyDescription(Qt::Key_Right, "Selects next key frame");
-    setKeyDescription(Qt::Key_Return, "Starts/stops interpolation");
-
-    help();
+    //help();
     for (int i = 0; i < nbKeyPoints ; i++) {
         connect(keyPoint_[i], SIGNAL(manipulated()), SLOT(update()));
         connect(keyPoint_[i], SIGNAL(manipulated()), SLOT(updatePath()));
+        connect(keyPoint_[i], &ManipulatedFrame::manipulated, [=]() { uniViewer::updateKeyPointPosition(i); });
     }
 }
 
@@ -199,7 +188,6 @@ void uniViewer::draw()
     for (int i = 0; i < nbKeyPoints; ++i) {
       glPushMatrix();
       glMultMatrixd(keyPoint_[i]->matrix());
-      keyPointList_[i] = Frame(keyPoint_[i]->position(), keyPoint_[i]->orientation());
 
       if ((i == currentKP_) || (keyPoint_[i]->grabsMouse()))
         drawAxis(0.4*10/stepFactor);
@@ -236,78 +224,26 @@ void uniViewer::postDraw() {
     }
 }
 
-void uniViewer::updatePath2() {
-    path_.clear();
-
-    if (keyPointList_.first().position() == keyPointList_.last().position())
-      path_.push_back(Frame(keyPointList_.first().position(),
-                            keyPointList_.first().orientation()));
-    else {
-      static Frame fr;
-      Frame *kf_[4];
-      kf_[0] = &keyPointList_[0];
-      kf_[1] = kf_[0];
-      int index = 1;
-      kf_[2] = (index < keyPointList_.size()) ? &keyPointList_[index] : nullptr;
-      index++;
-      kf_[3] = (index < keyPointList_.size()) ? &keyPointList_[index] : nullptr;
-
-      while (kf_[2] != nullptr) {
-        Vec diff = kf_[2]->position() - kf_[1]->position();
-        Vec tgP_1 = 0.5 * (kf_[2]->position() - kf_[0]->position());
-        Vec tgP_2 = kf_[3] ? 0.5 * (kf_[3]->position() - kf_[1]->position()) : kf_[2]->position();
-
-        Quaternion tgQ_1 = Quaternion::squadTangent(kf_[0]->orientation(), kf_[1]->orientation(), kf_[2]->orientation());
-        Quaternion tgQ_2 = kf_[3] != nullptr ? Quaternion::squadTangent(kf_[1]->orientation(), kf_[2]->orientation(), kf_[3]->orientation()) : kf_[2]->orientation();
-
-        Vec v1 = 3.0 * diff - 2.0 * tgP_1 - tgP_2;
-        Vec v2 = -2.0 * diff + tgP_1 + tgP_2;
-
-        int nbSteps = floor(stepFactor * diff.norm());
-
-        for (int step = 0; step < nbSteps; step++) {
-          qreal alpha = step / static_cast<qreal>(nbSteps);
-          fr.setPosition(kf_[1]->position() + alpha * (tgP_1 + alpha * (v1 + alpha * v2)));
-          fr.setOrientation(Quaternion::squad(kf_[1]->orientation(),
-                                              tgQ_1, tgQ_2,
-                                              kf_[2]->orientation(), alpha));
-          path_.push_back(fr);
-        }
-
-        // Shift
-        kf_[0] = kf_[1];
-        kf_[1] = kf_[2];
-        kf_[2] = kf_[3];
-        index++;
-        kf_[3] = (index < keyPointList_.size()) ? &keyPointList_[index] : nullptr;
-      }
-
-      // Add last KeyFrame
-      path_.push_back(Frame(kf_[1]->position(), kf_[1]->orientation()));
-    }
-
-    updateKelvinlets();
-}
-
 void uniViewer::updatePath() {
     path_.clear();
 
+    for (int i = 0; i < nbKeyPoints; ++i) {
+      keyPoints_[i].position = keyPoint_[i]->position();
+    }
+
     static Frame fr;
-    Frame *kf_[4];
-    kf_[0] = &keyPointList_[0];
+    keyPoint *kf_[4];
+    kf_[0] = &keyPoints_[0];
     kf_[1] = kf_[0];
     int index = 1;
-    kf_[2] = (index < keyPointList_.size()) ? &keyPointList_[index] : nullptr;
+    kf_[2] = (index < keyPoints_.size()) ? &keyPoints_[index] : nullptr;
     index++;
-    kf_[3] = (index < keyPointList_.size()) ? &keyPointList_[index] : nullptr;
+    kf_[3] = (index < keyPoints_.size()) ? &keyPoints_[index] : nullptr;
 
     while (kf_[2] != nullptr) {
-        Vec diff = kf_[2]->position() - kf_[1]->position();
-        Vec tgP_1 = 0.5 * (kf_[2]->position() - kf_[0]->position());
-        Vec tgP_2 = kf_[3] ? 0.5 * (kf_[3]->position() - kf_[1]->position()) : kf_[2]->position();
-
-        Quaternion tgQ_1 = Quaternion::squadTangent(kf_[0]->orientation(), kf_[1]->orientation(), kf_[2]->orientation());
-        Quaternion tgQ_2 = kf_[3] != nullptr ? Quaternion::squadTangent(kf_[1]->orientation(), kf_[2]->orientation(), kf_[3]->orientation()) : kf_[2]->orientation();
+        Vec diff = kf_[2]->position - kf_[1]->position;
+        Vec tgP_1 = 0.5 * (kf_[2]->position - kf_[0]->position);
+        Vec tgP_2 = kf_[3] ? 0.5 * (kf_[3]->position - kf_[1]->position) : kf_[2]->position;
 
         Vec v1 = 3.0 * diff - 2.0 * tgP_1 - tgP_2;
         Vec v2 = -2.0 * diff + tgP_1 + tgP_2;
@@ -316,8 +252,7 @@ void uniViewer::updatePath() {
 
         for (int step = 0; step < nbSteps; step++) {
             qreal alpha = step / static_cast<qreal>(nbSteps);
-            fr.setPosition(kf_[1]->position() + alpha * (tgP_1 + alpha * (v1 + alpha * v2)));
-            //fr.setOrientation(Quaternion::squad(kf_[1]->orientation(), tgQ_1, tgQ_2, kf_[2]->orientation(), alpha));
+            fr.setPosition(kf_[1]->position + alpha * (tgP_1 + alpha * (v1 + alpha * v2)));
             path_.push_back(fr);
         }
 
@@ -326,11 +261,12 @@ void uniViewer::updatePath() {
         kf_[1] = kf_[2];
         kf_[2] = kf_[3];
         index++;
-        kf_[3] = (index < keyPointList_.size()) ? &keyPointList_[index] : nullptr;
+        kf_[3] = (index < keyPoints_.size()) ? &keyPoints_[index] : nullptr;
     }
 
     // Add last KeyFrame
-    path_.push_back(Frame(kf_[1]->position(), kf_[1]->orientation()));
+    fr.setPosition(kf_[1]->position);
+    path_.push_back(fr);
 
     //updateUniKelvinLets();
 }
@@ -458,17 +394,27 @@ void uniViewer::updateKeyPoint() {
 
 }
 
+void uniViewer::updateKeyPointPosition(int i) {
+    Vec pos = keyPoint_[i]->position();
+    emit updatedKpInFocus(i);
+    emit updatedKpPosX(pos.x);
+    emit updatedKpPosY(pos.y);
+    emit updatedKpPosZ(pos.z);
+}
+
 void uniViewer::addKeyPoint() {
     cout << "add to " << nbKeyPoints << endl;
     nbKeyPoints++;
+    emit addedKeyPoint(nbKeyPoints);
     cout << "result " << nbKeyPoints << endl;
     keyPoint_[nbKeyPoints - 1] = new ManipulatedFrame();
     keyPoint_[nbKeyPoints - 1]->setPosition(nbKeyPoints, 0, 0);
-    keyPointList_.push_back(Frame(keyPoint_[nbKeyPoints - 1]->position(), keyPoint_[nbKeyPoints - 1]->orientation()));
+    keyPoints_.push_back(keyPoint_[nbKeyPoints - 1]->position());
     cout << keyPoint_[nbKeyPoints - 1]->position() << endl;
 
     connect(keyPoint_[nbKeyPoints - 1], SIGNAL(manipulated()), SLOT(update()));
     connect(keyPoint_[nbKeyPoints - 1], SIGNAL(manipulated()), SLOT(updatePath()));
+    connect(keyPoint_[nbKeyPoints - 1], &ManipulatedFrame::manipulated, [=]() { uniViewer::updateKeyPointPosition(nbKeyPoints - 1); });
     updatePath();
     update();
 }
@@ -476,8 +422,31 @@ void uniViewer::addKeyPoint() {
 void uniViewer::removeKeyPoint() {
     if (nbKeyPoints > 2) {
         nbKeyPoints--;
-        keyPointList_.pop_back();
+        emit rmvedKeyPoint(nbKeyPoints);
+        keyPoints_.pop_back();
+        keyPoint_[nbKeyPoints] = nullptr;
         updatePath();
         update();
     }
+}
+
+void uniViewer::setKpPosX(int i, double x) {
+    Vec initPos = keyPoint_[i]->position();
+    keyPoint_[i]->setPosition(x, initPos.y, initPos.z);
+    update();
+    updatePath();
+}
+
+void uniViewer::setKpPosY(int i, double y) {
+    Vec initPos = keyPoint_[i]->position();
+    keyPoint_[i]->setPosition(initPos.x, y, initPos.z);
+    update();
+    updatePath();
+}
+
+void uniViewer::setKpPosZ(int i, double z) {
+    Vec initPos = keyPoint_[i]->position();
+    keyPoint_[i]->setPosition(initPos.x, initPos.y, z);
+    update();
+    updatePath();
 }

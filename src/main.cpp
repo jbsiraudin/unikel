@@ -62,38 +62,63 @@ int main(int argc, char **argv) {
   for (int i = 0; i < viewer->getNbKeypoints(); i++) {
       kpList->addItem(QStringLiteral("Point ")+std::to_string(i+1).c_str());
   }
-
+  QObject::connect(viewer, &uniViewer::updatedKpInFocus, kpList, &QComboBox::setCurrentIndex);
+  QObject::connect(viewer, &uniViewer::rmvedKeyPoint, kpList, &QComboBox::removeItem);
+  QObject::connect(viewer, &uniViewer::addedKeyPoint, [=](int idx) {kpList->addItem(QStringLiteral("Point ")+std::to_string(idx).c_str());});
 
   QLabel *posLabel = new QLabel(QStringLiteral("POSITION"));
   QDoubleSpinBox *posKeypointX = new QDoubleSpinBox;
   QDoubleSpinBox *posKeypointY = new QDoubleSpinBox;
   QDoubleSpinBox *posKeypointZ = new QDoubleSpinBox;
   posKeypointX->setRange(-1000.0, 1000.0);
+  posKeypointX->setValue(-1.0);
   posKeypointY->setRange(-1000.0, 1000.0);
+  posKeypointY->setValue(0.0);
   posKeypointZ->setRange(-1000.0, 1000.0);
+  posKeypointZ->setValue(0.0);
+  QObject::connect(posKeypointX, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+                   [=](double in) { viewer->setKpPosX(kpList->currentIndex(), in); });
+  QObject::connect(viewer, &uniViewer::updatedKpPosX, posKeypointX, &QDoubleSpinBox::setValue);
+  QObject::connect(posKeypointY, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+                   [=](double in) { viewer->setKpPosY(kpList->currentIndex(), in); });
+  QObject::connect(viewer, &uniViewer::updatedKpPosY, posKeypointY, &QDoubleSpinBox::setValue);
+  QObject::connect(posKeypointZ, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+                   [=](double in) { viewer->setKpPosZ(kpList->currentIndex(), in); });
+  QObject::connect(viewer, &uniViewer::updatedKpPosZ, posKeypointZ, &QDoubleSpinBox::setValue);
 
   QLabel *rotLabel = new QLabel(QStringLiteral("ROTATION"));
   QSlider *rotationSlider = new QSlider(Qt::Horizontal);
   rotationSlider->setTickInterval(20);
   rotationSlider->setTickPosition(QSlider::TicksAbove);
-  rotationSlider->setMinimum(0);
+  rotationSlider->setRange(0, 360);
   rotationSlider->setValue(0);
-  rotationSlider->setMaximum(360);
+  QObject::connect(rotationSlider, &QSlider::valueChanged, [=](int in) {viewer->setKpRot(kpList->currentIndex(), in); });
 
   QLabel *scaleLabel = new QLabel(QStringLiteral("SCALE"));
   QSlider *scaleSlider = new QSlider(Qt::Horizontal);
-  rotationSlider->setTickInterval(10);
-  rotationSlider->setTickPosition(QSlider::TicksAbove);
-  rotationSlider->setMinimum(0);
-  rotationSlider->setValue(100);
-  rotationSlider->setMaximum(100);
+  scaleSlider->setTickInterval(10);
+  scaleSlider->setTickPosition(QSlider::TicksAbove);
+  scaleSlider->setRange(0, 100);
+  scaleSlider->setValue(100);
+  QObject::connect(scaleSlider, &QSlider::valueChanged, [=](int in) {viewer->setKpScale(kpList->currentIndex(), in/100.0); });
 
   QLabel *epsilonLabel = new QLabel(QStringLiteral("EPSILON"));
   QDoubleSpinBox *epsilonSP = new QDoubleSpinBox();
   epsilonSP->setValue(10.0);
   epsilonSP->setRange(0.0, 30.0);
+  QObject::connect(epsilonSP, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
+                   [=](double in) {viewer->setKpEps(kpList->currentIndex(), in); });
 
-  QObject::connect(kpList, QOverload<int>::of(&QComboBox::currentIndexChanged), viewer, [=](int in){  });
+  QObject::connect(kpList, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                   [=](int in){
+                        keyPoint kp = viewer->getKeyPoint(in);
+                        posKeypointX->setValue(kp.position.x);
+                        posKeypointY->setValue(kp.position.y);
+                        posKeypointZ->setValue(kp.position.z);
+                        rotationSlider->setValue(kp.rotation);
+                        scaleSlider->setValue(100*kp.scale);
+                        epsilonSP->setValue(kp.epsilon);
+  });
 
 
   QGridLayout *kpCtrlLayout = new QGridLayout;

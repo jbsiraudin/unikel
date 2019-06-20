@@ -31,6 +31,8 @@
 #include "../qt/TextureHandler.h"
 #include "../qt/QSmartAction.h"
 
+using namespace qglviewer;
+
 enum VIEWERMODE {
     SOLO_BRUSH,
     MOVING_BRUSH
@@ -66,6 +68,26 @@ struct QSmartTextOverlay{
     }
 };
 
+struct keyPoint{
+    Vec position;
+    double rotation;
+    double scale;
+    double epsilon;
+
+    keyPoint(){
+        rotation = 0.0;
+        scale = 1.0;
+        epsilon = 10.0;
+    }
+
+    keyPoint(Vec in){
+        position = in;
+        rotation = 0.0;
+        scale = 1.0;
+        epsilon = 10.0;
+    }
+};
+
 class uniViewer : public QGLViewer
 {
     Q_OBJECT
@@ -90,6 +112,7 @@ public:
     inline int getNbKeypoints() { return nbKeyPoints; }
     inline int getStepFactor() { return stepFactor; }
     inline bool getDebugView() { return debugView; }
+    inline keyPoint getKeyPoint(int idx) { return keyPoints_[idx]; }
 
     void keyPressEvent(QKeyEvent *event);
     void mouseDoubleClickEvent(QMouseEvent *e);
@@ -104,13 +127,20 @@ public:
 
 public slots:
     void updatePath();
-    void updatePath2();
     void updateKelvinlets();
     //void updateUniKelvinLets();
 
+    void updateKeyPointPosition(int i);
     void updateKeyPoint();
     void addKeyPoint();
     void removeKeyPoint();
+
+    void setKpPosX(int i, double x);
+    void setKpPosY(int i, double y);
+    void setKpPosZ(int i, double z);
+    inline void setKpRot(int i, double rot) { keyPoints_[i].rotation = rot; }
+    inline void setKpScale(int i, double scale) { keyPoints_[i].scale = scale; }
+    inline void setKpEps(int i, double epsilon) { keyPoints_[i].epsilon = epsilon; }
 
     inline void setStepFactor(int in) { stepFactor = in; update(); updatePath(); }
     inline void setDebugView(bool in) { debugView = in; update(); }
@@ -122,11 +152,16 @@ public slots:
 
 signals:
     void pathUpdated();
+    void addedKeyPoint(int i);
+    void rmvedKeyPoint(int i);
+    void updatedKpInFocus(int i);
+    void updatedKpPosX(double x);
+    void updatedKpPosY(double y);
+    void updatedKpPosZ(double z);
 
 private:
     qglviewer::ManipulatedFrame **keyPoint_;
-    qglviewer::KeyFrameInterpolator kfi_;
-    QList<qglviewer::Frame> keyPointList_;
+    QList<keyPoint> keyPoints_;
     QList<qglviewer::Frame> path_;
     int stepFactor = 10;
     int nbKeyPoints = 2;
