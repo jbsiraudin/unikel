@@ -1,6 +1,5 @@
 
 #include "mesh.h"
-#include "kelvinlet.h"
 #include "fieldadvector.h"
 #include "unikelvinlet.h"
 
@@ -38,53 +37,23 @@ enum VIEWERMODE {
     MOVING_BRUSH
 };
 
-struct QSmartTextOverlay{
-    QString text;
-    double transparency;
-    double timetext;
-    QTime timer;
-
-    QSmartTextOverlay(){
-        timetext = 1500.0; // 1.5 second
-        transparency = 0.0;
-    }
-
-    void updateOverlayedText( QString const & t ) {
-        text = t;
-        transparency = 1.0;
-        timer.restart();
-    }
-
-    bool updateTransparency(){
-        if( transparency >= 0.0 ){
-            transparency = 1.0 - (double)(timer.elapsed()) / timetext;
-        }
-        if( transparency <= 0.0 ) {
-            transparency = 0.0;
-            return false;
-        }
-        // else:
-        return true;
-    }
-};
-
 struct keyPoint{
     Vec position;
-    double rotation;
+    double twist;
     double scale;
     double epsilon;
 
     keyPoint(){
-        rotation = 0.0;
+        twist = 0.0;
         scale = 1.0;
-        epsilon = 10.0;
+        epsilon = 0.1;
     }
 
     keyPoint(Vec in){
         position = in;
-        rotation = 0.0;
+        twist = 0.0;
         scale = 1.0;
-        epsilon = 10.0;
+        epsilon = 0.1;
     }
 };
 
@@ -93,13 +62,9 @@ class uniViewer : public QGLViewer
     Q_OBJECT
 
     Mesh mesh;
-    KelvinLet kelvinlet;
     std::vector<point3d> vertexDisplacements;
-    std::vector<KelvinLet> kelvinlets;
-    std::vector<uniKelvinLet> unikelvinlets;
 
     QWidget * controls;
-    QSmartTextOverlay textOverlay;
 
 public:
     uniViewer(QGLWidget *parent = nullptr) : QGLViewer(parent) {}
@@ -113,6 +78,7 @@ public:
     inline int getStepFactor() { return stepFactor; }
     inline bool getDebugView() { return debugView; }
     inline keyPoint getKeyPoint(int idx) { return keyPoints_[idx]; }
+    inline int getTimeMax() { return timeMax_; }
 
     void keyPressEvent(QKeyEvent *event);
     void mouseDoubleClickEvent(QMouseEvent *e);
@@ -120,34 +86,34 @@ public:
     void mouseMoveEvent(QMouseEvent *e);
     void mouseReleaseEvent(QMouseEvent *e);
 
+    void animate();
     void draw();
-    void postDraw();
     void init();
     QString helpString() const;
 
 public slots:
     void updatePath();
     void updateKelvinlets();
-    //void updateUniKelvinLets();
 
     void updateKeyPointPosition(int i);
-    void updateKeyPoint();
     void addKeyPoint();
     void removeKeyPoint();
 
     void setKpPosX(int i, double x);
     void setKpPosY(int i, double y);
     void setKpPosZ(int i, double z);
-    inline void setKpRot(int i, double rot) { keyPoints_[i].rotation = rot; }
-    inline void setKpScale(int i, double scale) { keyPoints_[i].scale = scale; }
-    inline void setKpEps(int i, double epsilon) { keyPoints_[i].epsilon = epsilon; }
+    inline void setKpTwist(int i, double twist) { keyPoints_[i].twist = twist; update(); updatePath();}
+    inline void setKpScale(int i, double scale) { keyPoints_[i].scale = scale; update(); updatePath();}
+    inline void setKpEps(int i, double epsilon) { keyPoints_[i].epsilon = epsilon; update(); updatePath(); }
 
     inline void setStepFactor(int in) { stepFactor = in; update(); updatePath(); }
     inline void setDebugView(bool in) { debugView = in; update(); }
 
+    void setShearModulus(double a);
+    void setPoissonModulus(double b);
+
     void openMesh();
     void saveMesh();
-    void showControls();
     void saveSnapShot();
 
 signals:
@@ -158,14 +124,25 @@ signals:
     void updatedKpPosX(double x);
     void updatedKpPosY(double y);
     void updatedKpPosZ(double z);
+    void updatedKpEpsilon(double epsilon);
+    void meshOpen(QString vertices);
+    void updatedShear(double a);
+    void updatedPoisson(double b);
+    void timed(int time);
 
 private:
     qglviewer::ManipulatedFrame **keyPoint_;
     QList<keyPoint> keyPoints_;
-    QList<qglviewer::Frame> path_;
+    QList<uniKelvinLet> unikelvinlets_;
+    QList<Mesh> meshes_;
+    QList<point3d> debugSpheres_, debugSpheresInit_;
+    double shearModulus = 1.0;
+    double poissonModulus = 0.5;
     int stepFactor = 10;
     int nbKeyPoints = 2;
     int currentKP_;
+    int time_ = 0;
+    int timeMax_ = 100;
 
-    bool debugView = false;
+    bool debugView = true;
 };

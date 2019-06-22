@@ -20,8 +20,7 @@ HEADERS = ./src/viewer.h \
     src/unikelvinlet.h
 SOURCES = ./src/viewer.cpp ./src/main.cpp \
     ./src/gl/basicColors.cpp \
-    ./src/gl/GLUtilityMethods.cpp \
-    src/unikelvinlet.cpp
+    ./src/gl/GLUtilityMethods.cpp
 
 # Linux
  INCLUDEPATH *= /usr/local/include

@@ -4,7 +4,8 @@
 using namespace qglviewer;
 using namespace std;
 
-///////////////////////   uni V i e w e r  ///////////////////////
+
+///////////////////////   uniViewer  ///////////////////////
 
 void uniViewer::adjustCamera(const point3d &bb, const point3d &BB)
 {
@@ -17,33 +18,6 @@ void uniViewer::adjustCamera(const point3d &bb, const point3d &BB)
 void uniViewer::keyPressEvent(QKeyEvent *event)
 {
     switch (event->key()) {
-    case Qt::Key_Left:
-        currentKP_ = (currentKP_ + nbKeyPoints - 1) % nbKeyPoints;
-        setManipulatedFrame(keyPoint_[currentKP_]);
-        update();
-        break;
-    case Qt::Key_Right:
-        currentKP_ = (currentKP_ + 1) % nbKeyPoints;
-        setManipulatedFrame(keyPoint_[currentKP_]);
-        update();
-        break;
-    case Qt::Key_Up:
-        updateOverlayedText("epsilon +1");
-        for (unsigned long i = 0; i < kelvinlets.size(); ++i) {
-            kelvinlets[i].epsilon += 1.0;
-        }
-        updatePath();
-        break;
-    case Qt::Key_Down:
-        updateOverlayedText("epsilon -1");
-        for (unsigned long i = 0; i < kelvinlets.size(); ++i) {
-            kelvinlets[i].epsilon -= 1.0;
-        }
-        updatePath();
-        break;
-    case Qt::Key_J:
-        updateOverlayedText("Test overlay");
-        update();
     case Qt::Key_H:
         help();
     default:
@@ -53,12 +27,6 @@ void uniViewer::keyPressEvent(QKeyEvent *event)
 
 void uniViewer::mouseDoubleClickEvent(QMouseEvent *e)
 {
-    if( (e->modifiers() & Qt::ControlModifier)  &&  (e->button() == Qt::LeftButton) )
-    {
-        showControls();
-        return;
-    }
-
     QGLViewer::mouseDoubleClickEvent(e);
 }
 
@@ -77,28 +45,9 @@ void uniViewer::mouseReleaseEvent(QMouseEvent* e  ) {
 
 QString uniViewer::helpString() const {
     QString text("<h2>UniKel</h2>");
-    text += "<p>";
-    text += "<h3>Basics</h3>";
-    text += "<p>";
-    text += "<ul>";
-    text += "<li>H   :   make this help appear</li>";
-    text += "</ul>";
-
-    text += "<h2>K e y F r a m e s</h2>";
-    text += "A <i>KeyFrameInterpolator</i> holds an interpolated path defined by "
-            "key frames. ";
-    text += "It can then smoothly make its associed frame follow that path. Key "
-            "frames can interactively be manipulated, even ";
-    text += "during interpolation.<br><br>";
-    text += "Note that the camera holds 12 such keyFrameInterpolators, binded to "
-            "F1-F12. Press <b>Alt+Fx</b> to define new key ";
-    text += "frames, and then press <b>Fx</b> to make the camera follow the "
-            "path. Press <b>C</b> to visualize these paths.<br><br>";
-    text += "<b>+/-</b> changes the interpolation speed. Negative values are "
-            "allowed.<br><br>";
-    text += "<b>Return</b> starts-stops the interpolation.<br><br>";
-    text += "Use the left and right arrows to change the manipulated KeyFrame. ";
-    text += "Press <b>Control</b> to move it or simply hover over it.";
+    text += "<h3>Kelvinlets experiment</h3>";
+    text += "Create a path for the kelvinlets to follow. ";
+    text += "Right click on a keypoint to drag it around.";
     return text;
 }
 
@@ -144,10 +93,13 @@ void uniViewer::init()
         keyPoints_.push_back(keyPoint(keyPoint_[i]->position()));
     }
 
-    for (unsigned long i = 0; i < kelvinlets.size(); ++i) {
-        kelvinlets[i].state = KelvinLet::GRABBED;
-        kelvinlets[i].mode = KelvinLet::TRANSLATE;
-        kelvinlets[i].scale = KelvinLet::MONOSCALE;
+    for (int i = -3; i <= 3; i++) {
+        for (int j = -3; j <= 3; j++) {
+            for (int k = -3; k <= 3; k++) {
+                debugSpheres_.push_back(Vec(i/3.0, j/3.0, k/3.0));
+                debugSpheresInit_.push_back(Vec(i/3.0, j/3.0, k/3.0));
+            }
+        }
     }
 
     updatePath();
@@ -171,19 +123,28 @@ void uniViewer::draw()
     //Draw mesh
     glEnable(GL_DEPTH_TEST);
     glEnable( GL_LIGHTING );
-    glColor3f(0.5f,0.5f,0.8f);
-    glBegin(GL_TRIANGLES);
-    for( unsigned int t = 0 ; t < mesh.triangles.size() ; ++t ) {
-        point3d const & p0 = mesh.vertices[mesh.triangles[t][0]].p + vertexDisplacements[mesh.triangles[t][0]];
-        point3d const & p1 = mesh.vertices[mesh.triangles[t][1]].p + vertexDisplacements[mesh.triangles[t][1]];
-        point3d const & p2 = mesh.vertices[mesh.triangles[t][2]].p + vertexDisplacements[mesh.triangles[t][2]];
-        point3d const & n = point3d::cross( p1-p0 , p2-p0 ).direction();
-        glNormal3f(n[0],n[1],n[2]);
-        glVertex3f(p0[0],p0[1],p0[2]);
-        glVertex3f(p1[0],p1[1],p1[2]);
-        glVertex3f(p2[0],p2[1],p2[2]);
+
+    if (!debugView) {
+        glColor3f(0.5f,0.5f,0.8f);
+        glBegin(GL_TRIANGLES);
+        for( unsigned int t = 0 ; t < mesh.triangles.size() ; ++t ) {
+            point3d const & p0 = mesh.vertices[mesh.triangles[t][0]].p + vertexDisplacements[mesh.triangles[t][0]];
+            point3d const & p1 = mesh.vertices[mesh.triangles[t][1]].p + vertexDisplacements[mesh.triangles[t][1]];
+            point3d const & p2 = mesh.vertices[mesh.triangles[t][2]].p + vertexDisplacements[mesh.triangles[t][2]];
+            point3d const & n = point3d::cross( p1-p0 , p2-p0 ).direction();
+            n.glNormal();
+            p0.glVertex();
+            p1.glVertex();
+            p2.glVertex();
+        }
+        glEnd();
+    } else {
+        //cout << debugSpheres_[1] << endl;
+        glColor3f(36.0f/255.0f,153.0f/255.0f,252.0f/255.0f);
+        for (int i = 0; i < debugSpheresInit_.size(); i++) {
+            BasicGL::drawSphere(debugSpheres_[i].x(), debugSpheres_[i].y(), debugSpheres_[i].z(), 0.05, 6, 6);
+        }
     }
-    glEnd();
 
     for (int i = 0; i < nbKeyPoints; ++i) {
       glPushMatrix();
@@ -198,125 +159,108 @@ void uniViewer::draw()
     }
 
     drawPath();
-
-//    glEnable(GL_CULL_FACE);
-//    glDisable(GL_DEPTH);
-//    glDisable(GL_DEPTH_TEST);
-//    glEnable(GL_BLEND);
-//    glColor4f(0,1,1,0.4f);
-//    BasicGL::drawSphere(kelvinlets[0].pos[0], kelvinlets[0].pos[1], kelvinlets[0].pos[2], kelvinlets[0].epsilon, 50, 50);
-
-////    glColor4f(1,0,1,0.4f);
-////    BasicGL::drawSphere(kelvinlets[1].center[0], kelvinlets[1].center[1], kelvinlets[1].center[2], kelvinlets[1].epsilon, 50, 50);
-
-//    glDisable(GL_BLEND);
-//    glEnable(GL_DEPTH);
-//    glEnable(GL_DEPTH_TEST);
-//    glDisable(GL_CULL_FACE);
-}
-
-void uniViewer::postDraw() {
-    bool textNeedsDisplay = textOverlay.updateTransparency();
-    if( textNeedsDisplay ){
-        glColor4f(0,0,0,std::max<double>(0.0, textOverlay.transparency ));
-        QFont fontToUse; fontToUse.setPixelSize(50);
-        drawText( 50 , 100 ,  textOverlay.text  , fontToUse);
-    }
+    emit timed(time_);
 }
 
 void uniViewer::updatePath() {
-    path_.clear();
+    unikelvinlets_.clear();
 
     for (int i = 0; i < nbKeyPoints; ++i) {
       keyPoints_[i].position = keyPoint_[i]->position();
     }
 
-    static Frame fr;
-    keyPoint *kf_[4];
-    kf_[0] = &keyPoints_[0];
-    kf_[1] = kf_[0];
+    static uniKelvinLet tmp;
+    keyPoint *kp_[4];
+    kp_[0] = &keyPoints_[0];
+    kp_[1] = kp_[0];
     int index = 1;
-    kf_[2] = (index < keyPoints_.size()) ? &keyPoints_[index] : nullptr;
+    kp_[2] = (index < keyPoints_.size()) ? &keyPoints_[index] : nullptr;
     index++;
-    kf_[3] = (index < keyPoints_.size()) ? &keyPoints_[index] : nullptr;
+    kp_[3] = (index < keyPoints_.size()) ? &keyPoints_[index] : nullptr;
 
-    while (kf_[2] != nullptr) {
-        Vec diff = kf_[2]->position - kf_[1]->position;
-        Vec tgP_1 = 0.5 * (kf_[2]->position - kf_[0]->position);
-        Vec tgP_2 = kf_[3] ? 0.5 * (kf_[3]->position - kf_[1]->position) : kf_[2]->position;
+    while (kp_[2] != nullptr) {
+        Vec diff = kp_[2]->position - kp_[1]->position;
+        Vec tgP_1 = 0.5 * (kp_[2]->position - kp_[0]->position);
+        Vec tgP_2 = kp_[3] ? 0.5 * (kp_[3]->position - kp_[1]->position) : kp_[2]->position;
 
         Vec v1 = 3.0 * diff - 2.0 * tgP_1 - tgP_2;
         Vec v2 = -2.0 * diff + tgP_1 + tgP_2;
+
+        double scale_diff = kp_[2]->scale - kp_[1]->scale;
+        double twist_diff = kp_[2]->twist - kp_[1]->twist;
+        double epsilon_diff = kp_[2]->epsilon - kp_[1]->epsilon;
 
         int nbSteps = floor(stepFactor * diff.norm());
 
         for (int step = 0; step < nbSteps; step++) {
             qreal alpha = step / static_cast<qreal>(nbSteps);
-            fr.setPosition(kf_[1]->position + alpha * (tgP_1 + alpha * (v1 + alpha * v2)));
-            path_.push_back(fr);
+            qreal alpha_plus = (step+1) / static_cast<qreal>(nbSteps);
+            Vec posStart = kp_[1]->position + alpha * (tgP_1 + alpha * (v1 + alpha * v2));
+            Vec posEnd = kp_[1]->position + alpha_plus * (tgP_1 + alpha_plus * (v1 + alpha_plus * v2));
+
+            tmp.setCenterEnd(point3d(posStart.x, posStart.y, posStart.z), point3d(posEnd.x, posEnd.y, posEnd.z));
+            tmp.scaling_s = kp_[1]->scale + alpha * scale_diff;
+            tmp.twisting_q = kp_[1]->twist + alpha * twist_diff;
+            tmp.epsilon = kp_[1]->epsilon + alpha * epsilon_diff;
+
+            unikelvinlets_.push_back(tmp);
         }
 
         // Shift
-        kf_[0] = kf_[1];
-        kf_[1] = kf_[2];
-        kf_[2] = kf_[3];
+        kp_[0] = kp_[1];
+        kp_[1] = kp_[2];
+        kp_[2] = kp_[3];
         index++;
-        kf_[3] = (index < keyPoints_.size()) ? &keyPoints_[index] : nullptr;
+        kp_[3] = (index < keyPoints_.size()) ? &keyPoints_[index] : nullptr;
     }
-
-    // Add last KeyFrame
-    fr.setPosition(kf_[1]->position);
-    path_.push_back(fr);
-
-    //updateUniKelvinLets();
+    //updateKelvinlets();
 }
 
-//void updateUniKelvinLets() {
-//    cout << "prout" << endl;
-//}
-
 void uniViewer::updateKelvinlets() {
-    kelvinlets.resize(path_.size()-1);
-
-    for (int i = 0; i < path_.size()-1; ++i) {
-        kelvinlets[i].center = point3d(path_[i].position().x, path_[i].position().y, path_[i].position().z);
-        kelvinlets[i].pos = point3d(path_[i+1].position().x, path_[i+1].position().y, path_[i+1].position().z);
-        kelvinlets[i].translation_f = kelvinlets[i].pos - kelvinlets[i].center;
-    }
-
-    FieldAdvector fieldAdvector;
+    //FieldAdvector fieldAdvector;
     for( unsigned int v = 0 ; v < mesh.vertices.size() ; ++v ) {
         vertexDisplacements[v] = point3d(0, 0, 0);
+
+//        Q_FOREACH(uniKelvinLet kel, unikelvinlets_) {
+//            vertexDisplacements[v] += kel.computeNaiveVelocity(mesh.vertices[v].p+vertexDisplacements[v]);
+//        }
     }
 
-    for (unsigned long i = 0; i < kelvinlets.size(); ++i) {
+    Q_FOREACH(uniKelvinLet kel, unikelvinlets_) {
         for( unsigned int v = 0 ; v < mesh.vertices.size() ; ++v ) {
-            vertexDisplacements[v] += fieldAdvector.RungeKutta_RK4(mesh.vertices[v].p , kelvinlets[i] , 10);
+            vertexDisplacements[v] += kel.computeVelocity(mesh.vertices[v].p+vertexDisplacements[v]);
         }
     }
+}
 
-//    cout << "Displacements" << endl;
-//    for( unsigned int v = 0 ; v < mesh.vertices.size() ; ++v ) {
-//        cout << vertexDisplacements[v] << endl;
-//    }
+void uniViewer::animate() {
+    if(time_++ < timeMax_) {
+        Q_FOREACH(uniKelvinLet kel, unikelvinlets_) {
+            //kel.printInfo();
+            for (int i = 0; i < debugSpheres_.size(); i++) {
+                debugSpheres_[i] += kel.computeVelocity(debugSpheres_[i]);
+            }
+        }
+    } else {
+        time_ = 0;
+        for (int i = 0; i < debugSpheres_.size(); i++) {
+            debugSpheres_[i] = debugSpheresInit_[i];
+        }
+    }
 }
 
 void uniViewer::drawPath() {
     glDisable(GL_LIGHTING);
     glLineWidth(2);
     glBegin(GL_LINE_STRIP);
-    Q_FOREACH (Frame fr, path_)
-        glVertex3fv(fr.position());
+    Q_FOREACH (uniKelvinLet kel, unikelvinlets_)
+        kel.center.glVertex();
     glEnd();
 
-    glColor3f(1.f, 0.f, 0.f);
-    drawArrow(0.5, 0.0, 12);
-    for (int i = 0; i < path_.size() - 1; i++) {
-        drawArrow(path_[i].position(), path_[i+1].position(), -1.0, 12);
+    Q_FOREACH (uniKelvinLet kel, unikelvinlets_) {
+        glColor3f(kel.epsilon/20.f, 1.f - kel.scaling_s, kel.twisting_q/360.l);
+        drawArrow(Vec(kel.center), Vec(kel.end));
     }
-
-    glColor3f(1.f, 1.f, 1.f);
-    //path_.empty();
 }
 
 void uniViewer::openMesh()
@@ -331,25 +275,28 @@ void uniViewer::openMesh()
         if(success) {
             std::cout << fileName.toStdString() << " was opened successfully" << std::endl;
             mesh.updateBoundingBox();
+            emit meshOpen(QStringLiteral("Mesh vertices : ")+std::to_string(mesh.vertices.size()).c_str());
             adjustCamera(mesh.boundingBox.bb,mesh.boundingBox.BB);
-            for (unsigned long i = 0; i < kelvinlets.size(); ++i) {
-                kelvinlets[i].epsilon = 0.1 * mesh.boundingBox.diagonal();
-                kelvinlets[i].epsilon2 = 1.1 * kelvinlets[i].epsilon;
-                kelvinlets[i].epsilon3 = 1.1 * kelvinlets[i].epsilon2;
-                kelvinlets[i].setElasticityParameters( 0.1 / mesh.boundingBox.squareDiagonal() , 0.3 );
-
+            for (int i = 0; i < keyPoints_.size(); i++) {
+                keyPoints_[i].epsilon = 0.6 * mesh.boundingBox.diagonal();
+                cout << keyPoints_[i].epsilon << endl;
+                //emit updatedKpInFocus(i);
+                //emit updatedKpEpsilon(keyPoints_[i].epsilon);
             }
+            Q_FOREACH (uniKelvinLet kel, unikelvinlets_) {
+                kel.setElasticityParameters(0.1 / mesh.boundingBox.squareDiagonal() , 0.3);
+            }
+            emit updatedShear(0.1 / mesh.boundingBox.squareDiagonal());
+            emit updatedPoisson(0.3);
             vertexDisplacements.clear();
             vertexDisplacements.resize( mesh.vertices.size() , point3d(0,0,0) );
-            cout << "vertices: " << mesh.vertices.size() << endl;
-            cout << "epsilon: " <<  kelvinlets[0].epsilon << endl;
             update();
         }
         else
             std::cout << fileName.toStdString() << " could not be opened" << std::endl;
     }
 
-    //updateKelvinlets();
+    updateKelvinlets();
 }
 
 void uniViewer::saveMesh()
@@ -368,13 +315,6 @@ void uniViewer::saveMesh()
     }
 }
 
-void uniViewer::showControls()
-{
-    // Show controls :
-    controls->close();
-    controls->show();
-}
-
 void uniViewer::saveSnapShot()
 {
     QString fileName = QFileDialog::getSaveFileName(nullptr,"*.png","");
@@ -383,15 +323,6 @@ void uniViewer::saveSnapShot()
         setSnapshotQuality(100);
         saveSnapshot( fileName );
     }
-}
-
-void uniViewer::updateOverlayedText(const QString &t) {
-    textOverlay.updateOverlayedText(t);
-    if( ! animationIsStarted() ) startAnimation(); // you need this so that the text is refreshed on screen even without mouse/keyboard events
-}
-
-void uniViewer::updateKeyPoint() {
-
 }
 
 void uniViewer::updateKeyPointPosition(int i) {
@@ -433,15 +364,15 @@ void uniViewer::removeKeyPoint() {
 void uniViewer::setKpPosX(int i, double x) {
     Vec initPos = keyPoint_[i]->position();
     keyPoint_[i]->setPosition(x, initPos.y, initPos.z);
-    update();
     updatePath();
+    update();
 }
 
 void uniViewer::setKpPosY(int i, double y) {
     Vec initPos = keyPoint_[i]->position();
     keyPoint_[i]->setPosition(initPos.x, y, initPos.z);
-    update();
     updatePath();
+    update();
 }
 
 void uniViewer::setKpPosZ(int i, double z) {
@@ -449,4 +380,22 @@ void uniViewer::setKpPosZ(int i, double z) {
     keyPoint_[i]->setPosition(initPos.x, initPos.y, z);
     update();
     updatePath();
+}
+
+void uniViewer::setShearModulus(double a) {
+    shearModulus = a;
+    Q_FOREACH (uniKelvinLet kel, unikelvinlets_) {
+        kel.setElasticityParameters(shearModulus , poissonModulus);
+    }
+    updateKelvinlets();
+    update();
+}
+
+void uniViewer::setPoissonModulus(double b) {
+    poissonModulus = b;
+    Q_FOREACH (uniKelvinLet kel, unikelvinlets_) {
+        kel.setElasticityParameters(shearModulus , poissonModulus);
+    }
+    updateKelvinlets();
+    update();
 }
