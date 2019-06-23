@@ -17,10 +17,10 @@ struct uniKelvinLet{
     double epsilon;
     double a , b; // elasticity parameters : a = 0.25 / (M_PI * muShearModulus);  b = a / (4 - 4*nuPoissonRatio);
 
-    uniKelvinLet() : epsilon(0.1) , a(1.0) , b(0.5) {}
+    uniKelvinLet() : epsilon(0.1) , a(1.0) , b(0.3) {}
 
     void printInfo() {
-        std::cout << translation_f << std::endl;
+        std::cout << scaling_s << std::endl;
     }
 
     void setCenterEnd(point3d inCenter, point3d inEnd) {
@@ -38,10 +38,10 @@ struct uniKelvinLet{
         point3d r = x - center;
         double r_epsilon = sqrt( r.sqrnorm() + epsilon * epsilon );
         point3d resultTranslate = ((a-b)/r_epsilon)*translation_f + (b * point3d::dot(r,translation_f)/(r_epsilon*r_epsilon*r_epsilon))*r + (a * epsilon*epsilon / (2 * r_epsilon*r_epsilon*r_epsilon))*translation_f;
-        //point3d resultScale = (2.0*b-a)*(1.0/(r_epsilon*r_epsilon*r_epsilon) + 3.0*epsilon*epsilon/(2.0*r_epsilon*r_epsilon*r_epsilon*r_epsilon*r_epsilon))*(scaling_s-1)*r;
-        //point3d resultTwist = (-a)*(1.0/(r_epsilon*r_epsilon*r_epsilon) + 3.0*epsilon*epsilon/(2.0*r_epsilon*r_epsilon*r_epsilon*r_epsilon*r_epsilon))*point3d::cross(translation_f.direction()*twisting_q, r);
+        point3d resultScale = (2.0*b-a)*(1.0/(r_epsilon*r_epsilon*r_epsilon) + 3.0*epsilon*epsilon/(2.0*r_epsilon*r_epsilon*r_epsilon*r_epsilon*r_epsilon))*(-scaling_s)*r;
+        point3d resultTwist = (-a)*(1.0/(r_epsilon*r_epsilon*r_epsilon) + 3.0*epsilon*epsilon/(2.0*r_epsilon*r_epsilon*r_epsilon*r_epsilon*r_epsilon))*point3d::cross(translation_f.direction()*twisting_q, r);
         //return ((2.0/(3*a - 2*b)) / (1.0/epsilon)) * resultTranslate;
-        return 0.1*resultTranslate;
+        return (resultTranslate + resultScale + resultTwist);
     }
 
     point3d RungeKutta_RK4( point3d const & x , unsigned int nSteps ) const {
@@ -70,10 +70,10 @@ struct uniKelvinLet{
     }
 
     point3d computeCombinedVelocity( point3d const & x ) const {
-        point3d resultTranslate = computeVelocityTranslate(x);
-        point3d resultScale = computeVelocityScale(resultTranslate);
+        point3d resultTranslate = x + 0.1*computeVelocityTranslate(x);
+        point3d resultScale = resultTranslate + 0.1*computeVelocityScale(resultTranslate);
         point3d resultTwist = computeVelocityTwist(resultScale);
-        return resultTwist;
+        return resultScale;
     }
 
     point3d computeVelocityTranslate( point3d const & x ) const {

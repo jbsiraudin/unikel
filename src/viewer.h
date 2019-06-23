@@ -37,6 +37,16 @@ enum VIEWERMODE {
     MOVING_BRUSH
 };
 
+struct vec2 {
+    int pos1;
+    int pos2;
+
+    vec2(int un, int deux) {
+        pos1 = un;
+        pos2 = deux;
+    }
+};
+
 struct keyPoint{
     Vec position;
     double twist;
@@ -45,15 +55,15 @@ struct keyPoint{
 
     keyPoint(){
         twist = 0.0;
-        scale = 1.0;
-        epsilon = 0.1;
+        scale = 0.0;
+        epsilon = 1.0;
     }
 
     keyPoint(Vec in){
         position = in;
         twist = 0.0;
-        scale = 1.0;
-        epsilon = 0.1;
+        scale = 0.0;
+        epsilon = 1.0;
     }
 };
 
@@ -61,10 +71,7 @@ class uniViewer : public QGLViewer
 {
     Q_OBJECT
 
-    Mesh mesh;
     std::vector<point3d> vertexDisplacements;
-
-    QWidget * controls;
 
 public:
     uniViewer(QGLWidget *parent = nullptr) : QGLViewer(parent) {}
@@ -80,6 +87,8 @@ public:
     inline keyPoint getKeyPoint(int idx) { return keyPoints_[idx]; }
     inline int getTimeMax() { return timeMax_; }
 
+    void addToLines(point3d point);
+
     void keyPressEvent(QKeyEvent *event);
     void mouseDoubleClickEvent(QMouseEvent *e);
     void mousePressEvent(QMouseEvent *e);
@@ -93,7 +102,7 @@ public:
 
 public slots:
     void updatePath();
-    void updateKelvinlets();
+    void updateCov();
 
     void updateKeyPointPosition(int i);
     void addKeyPoint();
@@ -107,10 +116,16 @@ public slots:
     inline void setKpEps(int i, double epsilon) { keyPoints_[i].epsilon = epsilon; update(); updatePath(); }
 
     inline void setStepFactor(int in) { stepFactor = in; update(); updatePath(); }
+    inline void setSpeedFactor(double in) { speedFactor = in; update(); }
     inline void setDebugView(bool in) { debugView = in; update(); }
 
     void setShearModulus(double a);
     void setPoissonModulus(double b);
+
+    inline void setTimeMax(int time) { timeMax_ = time; }
+    void initUniKelvinlet();
+    void initAnimation();
+    void nextUniKelvinlet();
 
     void openMesh();
     void saveMesh();
@@ -134,15 +149,22 @@ private:
     qglviewer::ManipulatedFrame **keyPoint_;
     QList<keyPoint> keyPoints_;
     QList<uniKelvinLet> unikelvinlets_;
-    QList<Mesh> meshes_;
-    QList<point3d> debugSpheres_, debugSpheresInit_;
+    Mesh mesh_, meshInit_;
+    Mesh debugSpheres_, debugSpheresInit_;
+    QList<vec2> debugLines_;
+    mat33d cov_;
+
     double shearModulus = 1.0;
     double poissonModulus = 0.5;
     int stepFactor = 10;
+    double speedFactor = 0.1;
     int nbKeyPoints = 2;
     int currentKP_;
+
+    QList<unsigned int> activeKL_;
+
     int time_ = 0;
-    int timeMax_ = 100;
+    int timeMax_ = 75;
 
     bool debugView = true;
 };

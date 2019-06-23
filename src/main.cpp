@@ -56,6 +56,8 @@ int main(int argc, char **argv) {
   QPushButton *removeKeypointButton = new QPushButton;
   removeKeypointButton->setText(QStringLiteral("-"));
   QObject::connect(removeKeypointButton, &QPushButton::clicked, viewer, &uniViewer::removeKeyPoint);
+  QObject::connect(removeKeypointButton, &QPushButton::clicked,
+                   [=]() { kpParamLabel->setText(QStringLiteral("Keypoints: ")+std::to_string(viewer->getNbKeypoints()).c_str()); });
 
   QLabel *stepFactorLabel = new QLabel(QStringLiteral("Step factor: "));
   QSpinBox *stepFactorSP = new QSpinBox;
@@ -104,25 +106,24 @@ int main(int argc, char **argv) {
   QObject::connect(viewer, &uniViewer::updatedKpPosZ, posKeypointZ, &QDoubleSpinBox::setValue);
 
   QLabel *rotLabel = new QLabel(QStringLiteral("TWIST"));
-  QSlider *rotationSlider = new QSlider(Qt::Horizontal);
-  rotationSlider->setTickInterval(20);
-  rotationSlider->setTickPosition(QSlider::TicksAbove);
-  rotationSlider->setRange(0, 360);
-  rotationSlider->setValue(0);
-  QObject::connect(rotationSlider, &QSlider::valueChanged, [=](int in) {viewer->setKpTwist(kpList->currentIndex(), in); });
+  QDoubleSpinBox *twistSP = new QDoubleSpinBox;
+  twistSP->setRange(-10.0, 10.0);
+  twistSP->setValue(0.0);
+  twistSP->setSingleStep(0.1);
+  QObject::connect(twistSP, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [=](int in) {viewer->setKpTwist(kpList->currentIndex(), in); });
 
   QLabel *scaleLabel = new QLabel(QStringLiteral("SCALE"));
-  QSlider *scaleSlider = new QSlider(Qt::Horizontal);
-  scaleSlider->setTickInterval(10);
-  scaleSlider->setTickPosition(QSlider::TicksAbove);
-  scaleSlider->setRange(0, 100);
-  scaleSlider->setValue(100);
-  QObject::connect(scaleSlider, &QSlider::valueChanged, [=](int in) {viewer->setKpScale(kpList->currentIndex(), in/100.0); });
+  QDoubleSpinBox *scaleSP = new QDoubleSpinBox;
+  scaleSP->setRange(-100.0, 100.0);
+  scaleSP->setValue(0.0);
+  scaleSP->setSingleStep(5);
+  QObject::connect(scaleSP, QOverload<double>::of(&QDoubleSpinBox::valueChanged), [=](int in) {viewer->setKpScale(kpList->currentIndex(), in/100.0); });
 
   QLabel *epsilonLabel = new QLabel(QStringLiteral("EPSILON"));
   QDoubleSpinBox *epsilonSP = new QDoubleSpinBox;
-  epsilonSP->setValue(0.1);
+  epsilonSP->setValue(1.0);
   epsilonSP->setRange(0.0, 30.0);
+  scaleSP->setSingleStep(0.5);
   QObject::connect(epsilonSP, QOverload<double>::of(&QDoubleSpinBox::valueChanged),
                    [=](double in) {viewer->setKpEps(kpList->currentIndex(), in); });
   QObject::connect(viewer, &uniViewer::updatedKpEpsilon, epsilonSP, &QDoubleSpinBox::setValue);
@@ -133,11 +134,17 @@ int main(int argc, char **argv) {
                         posKeypointX->setValue(kp.position.x);
                         posKeypointY->setValue(kp.position.y);
                         posKeypointZ->setValue(kp.position.z);
-                        rotationSlider->setValue(kp.twist);
-                        scaleSlider->setValue(100*kp.scale);
+                        twistSP->setValue(kp.twist);
+                        scaleSP->setValue(100*kp.scale);
                         epsilonSP->setValue(kp.epsilon);
   });
 
+  QLabel *speedLabel = new QLabel(QStringLiteral("SPEED FACTOR"));
+  QDoubleSpinBox *speedSP = new QDoubleSpinBox;
+  speedSP->setValue(0.1);
+  speedSP->setRange(0.0, 1.0);
+  speedSP->setSingleStep(0.1);
+  QObject::connect(speedSP, QOverload<double>::of(&QDoubleSpinBox::valueChanged), viewer, &uniViewer::setSpeedFactor);
 
   QGridLayout *kpCtrlLayout = new QGridLayout;
   kpCtrlLayout->addWidget(kpList, 0, 0, 1, 7);
@@ -149,11 +156,14 @@ int main(int argc, char **argv) {
   kpCtrlLayout->addWidget(new QLabel(QStringLiteral("z: ")), 1, 5);
   kpCtrlLayout->addWidget(posKeypointZ, 1, 6);
   kpCtrlLayout->addWidget(rotLabel, 2, 0, 1, 1);
-  kpCtrlLayout->addWidget(rotationSlider, 2, 1, 1, 6);
+  kpCtrlLayout->addWidget(twistSP, 2, 1, 1, 6);
   kpCtrlLayout->addWidget(scaleLabel, 3, 0, 1, 1);
-  kpCtrlLayout->addWidget(scaleSlider, 3, 1, 1, 6);
+  kpCtrlLayout->addWidget(scaleSP, 3, 1, 1, 6);
   kpCtrlLayout->addWidget(epsilonLabel, 4, 0, 1, 1);
   kpCtrlLayout->addWidget(epsilonSP, 4, 1, 1, 6);
+  kpCtrlLayout->addItem(new QSpacerItem(50, 20), 5, 1);
+  kpCtrlLayout->addWidget(speedLabel, 6, 0, 1, 1);
+  kpCtrlLayout->addWidget(speedSP, 6, 1, 1, 6);
   kpCtrlGroup->setLayout(kpCtrlLayout);
   // ! [2]
 
@@ -211,25 +221,41 @@ int main(int argc, char **argv) {
   previousFrame->setFixedWidth(20);
   playFrame->setFixedWidth(20);
   nextFrame->setFixedWidth(20);
-  QObject::connect(playFrame, &QPushButton::clicked,
-                   [=]() {if(!viewer->animationIsStarted()) {
-                                viewer->startAnimation();
-                                playFrame->setText(QStringLiteral("II"));
-                            } else {
-                                  viewer->stopAnimation();
-                                  playFrame->setText(QStringLiteral(">"));
-                            }
-                    });
+  QObject::connect(playFrame, &QPushButton::clicked, [=]() {
+      if(!viewer->animationIsStarted()) {
+          viewer->startAnimation();
+          playFrame->setText(QStringLiteral("II"));
+      } else {
+          viewer->stopAnimation();
+          playFrame->setText(QStringLiteral(">"));
+      }
+  });
+  QObject::connect(previousFrame, &QPushButton::clicked, viewer, &uniViewer::initAnimation);
+  QObject::connect(nextFrame, &QPushButton::clicked, [=]() {
+      if(!viewer->animationIsStarted()) {
+          viewer->animate();
+          viewer->update();
+      }
+  });
 
   QSlider *timelineSlider = new QSlider(Qt::Horizontal);
   timelineSlider->setRange(0, viewer->getTimeMax());
   timelineSlider->setTickInterval(1);
   QObject::connect(viewer, &uniViewer::timed, timelineSlider, &QSlider::setValue);
 
+  QSpinBox *timer = new QSpinBox;
+  timer->setValue(75);
+  timer->setFixedWidth(55);
+  timer->setMaximum(200);
+  timer->setSingleStep(5);
+  QObject::connect(timer, QOverload<int>::of(&QSpinBox::valueChanged), viewer, &uniViewer::setTimeMax);
+  QObject::connect(timer, QOverload<int>::of(&QSpinBox::valueChanged), timelineSlider, &QSlider::setMaximum);
+
   timeline->addWidget(previousFrame);
   timeline->addWidget(playFrame);
   timeline->addWidget(nextFrame);
   timeline->addWidget(timelineSlider);
+  timeline->addWidget(timer);
   // ![5]
 
   QGridLayout *layout = new QGridLayout;

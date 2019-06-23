@@ -18,8 +18,14 @@ void uniViewer::adjustCamera(const point3d &bb, const point3d &BB)
 void uniViewer::keyPressEvent(QKeyEvent *event)
 {
     switch (event->key()) {
+    case Qt::Key_P:
+        if(!animationIsStarted()) {
+            startAnimation();
+        } else {
+            stopAnimation();
+        }
     case Qt::Key_H:
-        help();
+        //help();
     default:
         QGLViewer::keyPressEvent(event);
     }
@@ -93,16 +99,27 @@ void uniViewer::init()
         keyPoints_.push_back(keyPoint(keyPoint_[i]->position()));
     }
 
-    for (int i = -3; i <= 3; i++) {
-        for (int j = -3; j <= 3; j++) {
-            for (int k = -3; k <= 3; k++) {
-                debugSpheres_.push_back(Vec(i/3.0, j/3.0, k/3.0));
-                debugSpheresInit_.push_back(Vec(i/3.0, j/3.0, k/3.0));
+    // create debug spheres
+    for (int i = -2; i <= 2; i++) {
+        for (int j = -2; j <= 2; j++) {
+            for (int k = -2; k <= 2; k++) {
+                debugSpheres_.vertices.push_back(Vertex(i, j, k));
+                debugSpheresInit_.vertices.push_back(Vertex(i/2.0, j/2.0, k/2.0));
+
+                addToLines(point3d(i, j, k));
             }
         }
     }
+    for (unsigned long i = 0; i < debugSpheres_.vertices.size(); i++) {
+        debugSpheres_.vertices[i].p = debugSpheres_.vertices[i].p/2.0;
+    }
+
+    debugSpheres_.updateBoundingBox();
+    debugSpheresInit_.updateBoundingBox();
 
     updatePath();
+
+    initUniKelvinlet();
 
     currentKP_ = 0;
     setManipulatedFrame(keyPoint_[currentKP_]);
@@ -118,19 +135,29 @@ void uniViewer::init()
     }
 }
 
+void uniViewer::addToLines(point3d point) {
+    for (unsigned long i = 0; i < debugSpheres_.vertices.size()-1; i++) {
+        point3d r = point - debugSpheres_.vertices[i].p;
+        //bool already = debugLines_.contains(Vec(i, debugSpheres_.size()-1));
+        if (r.sqrnorm() == 1.0) {
+            debugLines_.push_back(vec2(i, debugSpheres_.vertices.size()-1));
+        }
+    }
+}
+
 void uniViewer::draw()
 {
     //Draw mesh
-    glEnable(GL_DEPTH_TEST);
+    glEnable( GL_DEPTH_TEST );
     glEnable( GL_LIGHTING );
 
     if (!debugView) {
         glColor3f(0.5f,0.5f,0.8f);
         glBegin(GL_TRIANGLES);
-        for( unsigned int t = 0 ; t < mesh.triangles.size() ; ++t ) {
-            point3d const & p0 = mesh.vertices[mesh.triangles[t][0]].p + vertexDisplacements[mesh.triangles[t][0]];
-            point3d const & p1 = mesh.vertices[mesh.triangles[t][1]].p + vertexDisplacements[mesh.triangles[t][1]];
-            point3d const & p2 = mesh.vertices[mesh.triangles[t][2]].p + vertexDisplacements[mesh.triangles[t][2]];
+        for( unsigned int t = 0 ; t < mesh_.triangles.size() ; ++t ) {
+            point3d const & p0 = mesh_.vertices[mesh_.triangles[t][0]].p;
+            point3d const & p1 = mesh_.vertices[mesh_.triangles[t][1]].p;
+            point3d const & p2 = mesh_.vertices[mesh_.triangles[t][2]].p;
             point3d const & n = point3d::cross( p1-p0 , p2-p0 ).direction();
             n.glNormal();
             p0.glVertex();
@@ -141,8 +168,20 @@ void uniViewer::draw()
     } else {
         //cout << debugSpheres_[1] << endl;
         glColor3f(36.0f/255.0f,153.0f/255.0f,252.0f/255.0f);
-        for (int i = 0; i < debugSpheresInit_.size(); i++) {
-            BasicGL::drawSphere(debugSpheres_[i].x(), debugSpheres_[i].y(), debugSpheres_[i].z(), 0.05, 6, 6);
+        for (unsigned long i = 0; i < debugSpheresInit_.vertices.size(); i++) {
+            BasicGL::drawSphere(debugSpheres_.vertices[i].p.x(), debugSpheres_.vertices[i].p.y(), debugSpheres_.vertices[i].p.z(), 0.03, 6, 6);
+        }
+
+        //glColor4f(1.0f, 1.0f, 0.0f, 0.5f);
+        //BasicGL::drawSphere(debugSpheres_.center.x(), debugSpheres_.center.y(), debugSpheres_.center.z(), 0.3, 6, 6);
+
+        glColor3f(36.0f/255.0f,153.0f/255.0f,252.0f/255.0f);
+        glLineWidth(1);
+        for (int i = 0; i < debugLines_.size(); i++) {
+            glBegin(GL_LINE_STRIP);
+            debugSpheres_.vertices[debugLines_[i].pos1].p.glVertex();
+            debugSpheres_.vertices[debugLines_[i].pos2].p.glVertex();
+            glEnd();
         }
     }
 
@@ -213,40 +252,94 @@ void uniViewer::updatePath() {
         index++;
         kp_[3] = (index < keyPoints_.size()) ? &keyPoints_[index] : nullptr;
     }
-    //updateKelvinlets();
-}
-
-void uniViewer::updateKelvinlets() {
-    //FieldAdvector fieldAdvector;
-    for( unsigned int v = 0 ; v < mesh.vertices.size() ; ++v ) {
-        vertexDisplacements[v] = point3d(0, 0, 0);
-
-//        Q_FOREACH(uniKelvinLet kel, unikelvinlets_) {
-//            vertexDisplacements[v] += kel.computeNaiveVelocity(mesh.vertices[v].p+vertexDisplacements[v]);
-//        }
-    }
-
-    Q_FOREACH(uniKelvinLet kel, unikelvinlets_) {
-        for( unsigned int v = 0 ; v < mesh.vertices.size() ; ++v ) {
-            vertexDisplacements[v] += kel.computeVelocity(mesh.vertices[v].p+vertexDisplacements[v]);
-        }
-    }
 }
 
 void uniViewer::animate() {
-    if(time_++ < timeMax_) {
-        Q_FOREACH(uniKelvinLet kel, unikelvinlets_) {
-            //kel.printInfo();
-            for (int i = 0; i < debugSpheres_.size(); i++) {
-                debugSpheres_[i] += kel.computeVelocity(debugSpheres_[i]);
+    if(time_++ < timeMax_) {     
+        if (!debugView) {
+            Q_FOREACH (int index, activeKL_) {
+                for (unsigned long i = 0; i < mesh_.vertices.size(); i++) {
+                    mesh_.vertices[i].p += speedFactor*unikelvinlets_[index].computeVelocity(mesh_.vertices[i].p);
+                }
             }
+            mesh_.updateBoundingBox();
+        } else {
+            Q_FOREACH (int index, activeKL_) {
+                for (unsigned long i = 0; i < debugSpheres_.vertices.size(); i++) {
+                    debugSpheres_.vertices[i].p += speedFactor*unikelvinlets_[index].computeVelocity(debugSpheres_.vertices[i].p);
+                }
+            }
+            debugSpheres_.updateBoundingBox();
         }
+
     } else {
-        time_ = 0;
-        for (int i = 0; i < debugSpheres_.size(); i++) {
-            debugSpheres_[i] = debugSpheresInit_[i];
+        initAnimation();
+    }
+
+    nextUniKelvinlet();
+}
+
+void uniViewer::initUniKelvinlet() {
+    activeKL_.clear();
+    unsigned int index = 0;
+    double min = 100.0;
+    point3d center = debugView ? debugSpheres_.center : mesh_.center;
+
+    for (int i = 0; i < unikelvinlets_.size(); i++) {
+        double toCmp = (unikelvinlets_[i].center-center).sqrnorm();
+        if (toCmp<min) {
+            index = i;
+            min = toCmp;
         }
     }
+
+    if(index == 0) {
+        activeKL_.push_back(0);
+        activeKL_.push_back(1);
+    } else if (index == unikelvinlets_.size()-1) {
+        activeKL_.push_back(unikelvinlets_.size()-2);
+        activeKL_.push_back(unikelvinlets_.size()-1);
+    } else {
+        activeKL_.push_back(index-1);
+        activeKL_.push_back(index);
+        activeKL_.push_back(index+1);
+    }
+}
+
+void uniViewer::nextUniKelvinlet() {
+    int index = activeKL_[1];
+    point3d center = debugView ? debugSpheres_.center : mesh_.center;
+
+    if(index < unikelvinlets_.size()-2) {
+        double min = (unikelvinlets_[index].center-center).sqrnorm();
+        double toCmp = (unikelvinlets_[index + 1].center-center).sqrnorm();
+
+        if (toCmp<min) {
+            if (index < unikelvinlets_.size()-3) {
+                activeKL_.clear();
+                activeKL_.push_back(index);
+                activeKL_.push_back(index+1);
+                activeKL_.push_back(index+2);
+            }
+        }
+    }
+}
+
+void uniViewer::initAnimation() {
+    time_ = 0;
+    if(!debugView) {
+        for (unsigned long i = 0; i < mesh_.vertices.size(); i++) {
+            mesh_.vertices[i].p = meshInit_.vertices[i].p;
+        }
+        mesh_.center = meshInit_.center;
+    } else {
+        for (unsigned long i = 0; i < debugSpheres_.vertices.size(); i++) {
+            debugSpheres_.vertices[i].p = debugSpheresInit_.vertices[i].p;
+        }
+        debugSpheres_.center = debugSpheresInit_.center;
+    }
+    initUniKelvinlet();
+    update();
 }
 
 void uniViewer::drawPath() {
@@ -257,9 +350,14 @@ void uniViewer::drawPath() {
         kel.center.glVertex();
     glEnd();
 
-    Q_FOREACH (uniKelvinLet kel, unikelvinlets_) {
-        glColor3f(kel.epsilon/20.f, 1.f - kel.scaling_s, kel.twisting_q/360.l);
-        drawArrow(Vec(kel.center), Vec(kel.end));
+    for (int i = 0; i < unikelvinlets_.size(); i++) {
+        if (activeKL_.contains(i)) {
+            glColor3f(1.f, 0.f, 0.f);
+        }
+        else {
+            glColor3f(unikelvinlets_[i].epsilon/20.f, 1.f - unikelvinlets_[i].scaling_s, unikelvinlets_[i].twisting_q/360.f);
+        }
+        drawArrow(Vec(unikelvinlets_[i].center), Vec(unikelvinlets_[i].end));
     }
 }
 
@@ -268,35 +366,36 @@ void uniViewer::openMesh()
     bool success = false;
     QString fileName = QFileDialog::getOpenFileName(NULL,"","");
     if ( !fileName.isNull() ) { // got a file name
-        if(fileName.endsWith(QString(".off")))
-            success = OFFIO::openTriMesh(fileName.toStdString() , mesh.vertices , mesh.triangles );
-        else if(fileName.endsWith(QString(".obj")))
-            success = OBJIO::openTriMesh(fileName.toStdString() , mesh.vertices , mesh.triangles );
+        if(fileName.endsWith(QString(".off"))) {
+            success = OFFIO::openTriMesh(fileName.toStdString() , mesh_.vertices , mesh_.triangles );
+            bool success2 = OFFIO::openTriMesh(fileName.toStdString() , meshInit_.vertices , meshInit_.triangles );
+        }
+        else if(fileName.endsWith(QString(".obj"))) {
+            success = OBJIO::openTriMesh(fileName.toStdString() , mesh_.vertices , mesh_.triangles );
+            bool success2 = OBJIO::openTriMesh(fileName.toStdString() , meshInit_.vertices , meshInit_.triangles );
+        }
         if(success) {
             std::cout << fileName.toStdString() << " was opened successfully" << std::endl;
-            mesh.updateBoundingBox();
-            emit meshOpen(QStringLiteral("Mesh vertices : ")+std::to_string(mesh.vertices.size()).c_str());
-            adjustCamera(mesh.boundingBox.bb,mesh.boundingBox.BB);
+            mesh_.updateBoundingBox();
+            meshInit_.updateBoundingBox();
+            emit meshOpen(QStringLiteral("Mesh vertices : ")+std::to_string(mesh_.vertices.size()).c_str());
+            adjustCamera(mesh_.boundingBox.bb,mesh_.boundingBox.BB);
+
             for (int i = 0; i < keyPoints_.size(); i++) {
-                keyPoints_[i].epsilon = 0.6 * mesh.boundingBox.diagonal();
-                cout << keyPoints_[i].epsilon << endl;
-                //emit updatedKpInFocus(i);
-                //emit updatedKpEpsilon(keyPoints_[i].epsilon);
+                keyPoints_[i].epsilon = 0.6 * mesh_.boundingBox.diagonal();
             }
             Q_FOREACH (uniKelvinLet kel, unikelvinlets_) {
-                kel.setElasticityParameters(0.1 / mesh.boundingBox.squareDiagonal() , 0.3);
+                kel.setElasticityParameters(0.1 / mesh_.boundingBox.squareDiagonal() , 0.3);
             }
-            emit updatedShear(0.1 / mesh.boundingBox.squareDiagonal());
+            emit updatedShear(0.1 / mesh_.boundingBox.squareDiagonal());
             emit updatedPoisson(0.3);
             vertexDisplacements.clear();
-            vertexDisplacements.resize( mesh.vertices.size() , point3d(0,0,0) );
+            vertexDisplacements.resize( mesh_.vertices.size() , point3d(0,0,0) );
             update();
         }
         else
             std::cout << fileName.toStdString() << " could not be opened" << std::endl;
     }
-
-    updateKelvinlets();
 }
 
 void uniViewer::saveMesh()
@@ -305,9 +404,9 @@ void uniViewer::saveMesh()
     QString fileName = QFileDialog::getOpenFileName(nullptr,"","");
     if ( !fileName.isNull() ) { // got a file name
         if(fileName.endsWith(QString(".off")))
-            success = OFFIO::save(fileName.toStdString() , mesh.vertices , mesh.triangles );
+            success = OFFIO::save(fileName.toStdString() , mesh_.vertices , mesh_.triangles );
         else if(fileName.endsWith(QString(".obj")))
-            success = OBJIO::save(fileName.toStdString() , mesh.vertices , mesh.triangles );
+            success = OBJIO::save(fileName.toStdString() , mesh_.vertices , mesh_.triangles );
         if(success)
             std::cout << fileName.toStdString() << " was saved" << std::endl;
         else
@@ -334,14 +433,11 @@ void uniViewer::updateKeyPointPosition(int i) {
 }
 
 void uniViewer::addKeyPoint() {
-    cout << "add to " << nbKeyPoints << endl;
     nbKeyPoints++;
     emit addedKeyPoint(nbKeyPoints);
-    cout << "result " << nbKeyPoints << endl;
     keyPoint_[nbKeyPoints - 1] = new ManipulatedFrame();
     keyPoint_[nbKeyPoints - 1]->setPosition(nbKeyPoints, 0, 0);
     keyPoints_.push_back(keyPoint_[nbKeyPoints - 1]->position());
-    cout << keyPoint_[nbKeyPoints - 1]->position() << endl;
 
     connect(keyPoint_[nbKeyPoints - 1], SIGNAL(manipulated()), SLOT(update()));
     connect(keyPoint_[nbKeyPoints - 1], SIGNAL(manipulated()), SLOT(updatePath()));
@@ -387,7 +483,6 @@ void uniViewer::setShearModulus(double a) {
     Q_FOREACH (uniKelvinLet kel, unikelvinlets_) {
         kel.setElasticityParameters(shearModulus , poissonModulus);
     }
-    updateKelvinlets();
     update();
 }
 
@@ -396,6 +491,9 @@ void uniViewer::setPoissonModulus(double b) {
     Q_FOREACH (uniKelvinLet kel, unikelvinlets_) {
         kel.setElasticityParameters(shearModulus , poissonModulus);
     }
-    updateKelvinlets();
     update();
+}
+
+void uniViewer::updateCov() {
+
 }

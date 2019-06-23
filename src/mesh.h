@@ -22,12 +22,15 @@ struct Triangle{
 struct Mesh{
     std::vector< Vertex > vertices;
     std::vector< Triangle > triangles;
+    point3d center;
 
     BBOXd boundingBox;
     void updateBoundingBox() {
         boundingBox.clear();
         for( unsigned int v = 0 ; v < vertices.size() ; ++v )
             boundingBox.add( vertices[v] );
+
+        center = (boundingBox.BB + boundingBox.bb)/2.0;
     }
 };
 
